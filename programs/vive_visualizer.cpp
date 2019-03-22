@@ -90,26 +90,29 @@ int main(int argc, char ** argv) {
   // While exit was not explicitly required, run
   uint64_t now = 0;
   uint64_t dt = 30 * 1000;//[microseconds]
-  int64_t offset = 0;
-  if (!manager.isLive()) {
+  int64_t vive_offset = 0;
+  if (manager.isLive()) {
+    manager.setOffset(getSteadyClockOffset());
+  } else {
     now = manager.getStart();
     std::cout << "monitoring_manager start: " << manager.getStart() << std::endl;
-    if (time_offset != 0) {
-      int64_t default_offset = vive_manager.getStart() - manager.getStart();
-      offset = default_offset + time_offset;
-      std::cout << "default_offset: " << default_offset << std::endl;
-      std::cout << "offset: " << offset << std::endl;
-    }
+    int64_t default_offset = manager.getStart() - vive_manager.getStart();
+    vive_offset = default_offset + time_offset;
+    std::cout << "default_offset: " << default_offset << std::endl;
+    std::cout << "vive_offset: " << vive_offset << std::endl;
   }
   while(manager.isGood()) {
     manager.update();
     if (manager.isLive()) {
-      now = getTimeStamp();
+      now = getTimeStamp() + manager.getOffset();;
+      vive_manager.autoUpdateOffset();
+      vive_offset = vive_manager.getOffset();
     } else {
       now += dt;
     }
-
-    vive_provider::GlobalMsg vive_msg = vive_manager.getMessage(now + offset);
+    int64_t vive_timestamp = now - vive_offset;
+    std::cout << "vive_ts " << vive_timestamp << std::endl;
+    vive_provider::GlobalMsg vive_msg = vive_manager.getMessage(vive_timestamp);
     
     for (const auto & entry : manager.getCalibratedImages(now)) {
       cv::Mat display_img = entry.second.getImg().clone();
@@ -125,13 +128,13 @@ int main(int argc, char ** argv) {
           cv::Point2f tracker_in_img = fieldToImg(tracker_in_field, camera_information);
           std::cout << "tracker in field" << tracker_in_field << std::endl;
           int circle_size = 4;
-          cv::Scalar color(255,0,0);
+          cv::Scalar color(0,0,255);
           cv::circle(display_img, tracker_in_img, circle_size, color, cv::FILLED);
         }
       cv::imshow(entry.first, display_img);
       }
     }
-    char key = cv::waitKey(10);
+    char key = cv::waitKey(1);
     if (key == 'q' || key == 'Q') break;
   }
 }
